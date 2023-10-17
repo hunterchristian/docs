@@ -1,0 +1,78 @@
+The ChippAI Python SDK provides an easy way to integrate with Chipp services from a Python environment. Using this SDK, you can retrieve user details, manage credits, and generate payment URLs for users to buy more credits.
+
+## Prerequisites
+
+- Python 3.x
+- The `chippai` package installed via pip.
+
+## Installation
+
+To install the `chippai` package:
+
+```bash
+pip install chippai
+```
+
+## Getting Started
+
+To start using the ChippAI Python SDK, you need to import the `Chipp` class and initialize it with your API key.
+
+```python
+from chippai import Chipp
+
+chipp = Chipp(api_key="your-api-key-from-Chipp-dashboard")
+```
+
+# Working With Users
+
+## Retrieving a User
+
+You can retrieve a user's details by providing a unique user identifier. This identifier should come from your database or authentication session.
+
+```python
+user = chipp.get_user(user_id="a-unique-identifier-for-user")
+```
+
+## Creating a User
+
+If the returned user object is `None`, it means the user does not exist in the Chipp system. In such cases, you can create a new user by providing the same unique user identifier. You can retrieve a user's details by providing a unique user identifier. This identifier should come from your database or authentication session.
+
+```python
+if user is None:
+    user = chipp.create_user(user_id="a-unique-identifier-for-user")
+```
+
+# Managing Credits
+
+## Checking User's Credits
+
+To check the number of credits remaining for a user:
+
+```python
+num_chipps = user.get_credits()
+```
+
+## Deducting Credits
+
+You can deduct credits from a user's account:
+
+```python
+user.deduct_credits(1)  # Deducts 1 credit from the user's account
+```
+
+# Payment Integration
+
+## Generating a Payment URL
+
+To generate a payment URL where a user can choose their preferred package of credits and make a purchase:
+
+```python
+url = user.get_packages_url(return_to_url="https://your-app.com/wherever-user-was")
+```
+
+After payment, the user will be redirected to the provided `return_to_url`.
+
+<Note>
+  Is there something about this documentation that doesn't make sense? [Click
+  this link to join us in Discord and tell us](https://discord.gg/SkASfNxtKa)
+</Note>

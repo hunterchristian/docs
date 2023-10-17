@@ -1,0 +1,34 @@
+<Warning>
+  This page is still under construction. [Chat with us in Discord to receive
+  support for integrating with Chipp using
+  Node.js](https://discord.gg/SkASfNxtKa)
+</Warning>
+
+If you are using a JavaScript-based application framework other than NextJS, you can still integrate with Chipp by leveraging the following methods in your Node.js API:
+
+```typescript
+import Chipp from "chipp";
+
+const chipp = new Chipp({
+  apiKey: "your-api-key-from-Chipp-dashboard",
+});
+
+// userId needs to come from your database or auth session
+let user = await chipp.getUser({ userId: "a-unique-identifier-for-user" });
+// If the user is null, the user does not exist in the Chipp system and needs to be created
+if (!user) {
+  user = await chipp.createUser({ userId: "a-unique-identifier-for-user" });
+}
+
+// Get the number of credits remaining for this user
+const numCredits = await user.getCredits();
+
+// Deduct credits from this user
+await user.deductCredits(1);
+
+// Generate a payment URL where this user can buy more credits
+// Pass in a redirect URL to bring your user back to your app after payment succeeds
+const url = await user.getPackagesUrl({
+  returnToUrl: "https://your-app.com/wherever-user-was",
+});
+```

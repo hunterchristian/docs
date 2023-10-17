@@ -1,0 +1,212 @@
+Chipp comes with a specialized NextJS library. Follow the instructions below to integrate.
+
+## 1. Sign up for an account
+
+Sign up for an account on https://app.chipp.ai and create an application to generate your API keys for test and live mode.
+
+## 2. Install Chipp
+
+In your project directory, install Chipp and the Chipp NextJS library by running `npm i chipp @chipp/nextjs-chipp`
+
+## 3. Add API Key
+
+Add your api key as an environment variable in your app with the name `CHIPP_API_KEY`
+
+<Frame>
+  <img src="/images/apikey.gif" style={{ borderRadius: "0.5rem" }} />
+</Frame>
+
+## 4. Create Chipp API folder structure
+
+Add the Chipp API to your project by creating a new folder named `credits` to your `/api` folder in your NextJS project and create a catch-all route named `[...chipp].ts` , e.g. `pages/api/credits/[...chipp].ts`
+
+## 5. Initialize Chipp API
+
+In the `[...chipp].ts` file, add the following:
+
+```typescript
+import { handleCredits } from "@chipp/nextjs-chipp";
+
+export default handleCredits({
+  getUserIdFromRequest: async (req, res) => {
+    // Return a unique identifier for the user making the request.
+    // This value is hashed before it is stored in the Chipp system.
+  },
+});
+```
+
+Whenever a request is made to the Chipp API, we need a way to identify which user is making the request so that we can load their credit balance accordingly. You will need to implement the `getUserIdFromRequest` function to return a unique identifier from the request, likely using cookies or authorization headers from the request object.
+
+Here is an example implementation of the `getUserIdFromRequest` function for an application that uses [Auth0](https://auth0.com/) for user authentication:
+
+```typescript
+import { getSession } from "@auth0/nextjs-auth0";
+import { handleCredits } from "@chipp/nextjs-chipp";
+
+export default handleCredits({
+  getUserIdFromRequest: async (req, res) => {
+    const session = await getSession(req, res);
+    if (!session?.user.sub) {
+      res.status(401).json({ error: "Unauthorized" });
+      return "";
+    }
+
+    // This value is hashed before it is stored in the Chipp system.
+    return session?.user.sub as string;
+  },
+});
+```
+
+## 6. Add the React Context provider to your client app
+
+Add the `<UserCreditsProvider>` component as a bottom-level provider in your `_app.tsx` file.
+
+```jsx
+import { UserCreditsProvider } from "@chipp/nextjs-chipp/client";
+
+export default function App({ Component, pageProps }) {
+  return (
+    {/* ...Opening tags for your other providers */}
+      <UserCreditsProvider>
+        <Component {...pageProps} />
+      </UserCreditsProvider>
+    {/* ...Closing tags for your other providers */}
+  );
+}
+```
+
+## 7. Display credit amounts using the `useUserCredits` React hook
+
+In the UI portion of your application, use the useUserCredits React hook to display credit balance of the currently logged-in user.
+
+```jsx
+import { useUserCredits } from "@chipp/nextjs-chipp/client";
+
+export default function YourComponent() {
+  const { userCredits, isLoading: balanceLoading } = useUserCredits();
+
+  if (balanceLoading) {
+    return <div>Loading...</div>;
+  }
+
+  // userCredits will be defined once balanceLoading is false
+  return <div>Credits: {userCredits}</div>;
+}
+```
+
+<Tip>
+  If you specify a default free trial amount of credits for your application,
+  each new user will start with that amount of credits.
+</Tip>
+
+1. When you make a call to your API to generate something for your user that will require deducting a credit (explained in later steps), call `refreshBalance` after the API call completes to refresh the credit balance of the user.
+
+```jsx
+import { useUserCredits } from "@chipp/nextjs-chipp/client";
+
+export default function YourOtherComponent() {
+  const { refreshBalance } = useUserCredits();
+
+  const handleButtonClick = async () => {
+    // Your API is responsible for deducting credits
+    // from the users balance. We'll explain how to
+    // do that in later steps.
+    const response = await fetch("/api/generate-thing");
+
+    // ...display something from the response to your user
+
+    // Update the user's credit balance.
+    // Because we use React Context, calling refreshBalance
+    // in one part of your app will update the value everywhere.
+    refreshBalance();
+  };
+
+  // ...
+}
+```
+
+<Info>
+  Because Chipp uses [React
+  Context](https://react.dev/learn/passing-data-deeply-with-context) in our
+  implementation of `useUserCredits` and `UserCreditsProvider`, calling
+  `refreshBalance` in one part of your app will update the value everywhere.
+</Info>
+
+## 8. Deduct credits from a user's balance
+
+In the API endpoint that is responsible for generating something for your user, call `deductCredits` to deduct credits from the currently logged-in user’s balance. This function will throw an error if the user does not have a sufficient balance, in which case a payment URL will be returned that can be displayed to the user.
+
+```jsx
+import type { NextApiRequest, NextApiResponse } from "next";
+import Chipp from "chipp";
+
+const chipp = new Chipp({
+  apiKey: process.env.CHIPP_API_KEY as string,
+});
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const session = await getSession(req, res);
+  const userId = session?.user?.sub;
+
+  const user = await chipp.getUser({ userId: userId as string });
+  if (!user) {
+    res.status(400).json({ error: "User not found" });
+    return;
+  }
+
+  // See if the user has enough credits to send a message
+  const userChippBalance = await user.getCredits();
+  if (userChippBalance < 1) {
+    // Get a payment URL for the user to add more credits
+    const paymentURL = await user.getPaymentURL({
+      // Return the user to the homepage after they've paid
+      // BASE_URL is set in .env to be the URL of the homepage
+      returnToUrl: process.env.AUTH0_BASE_URL,
+    });
+    res.status(200).json({
+      content: `You don't have enough credits to send a message. Please add more credits at ${paymentURL}`,
+    });
+    return;
+  }
+
+  // ...generate something for your user
+
+  // Deduct 1 credit from the user
+  await user.deductCredits(1);
+
+  res.status(200).json({
+    content: // the thing you generated for the user,
+  });
+}
+```
+
+<Tip>
+  Payment URLs can also be generated on-demand in case you want to allow users
+  to “top up” credits at any time.
+</Tip>
+
+## Live Example
+
+Here's an example implementation of the @chipp/nextjs-chipp library in the context of a chatbot:
+
+<iframe
+  style={{
+    width: "100%",
+    height: 900,
+    outline: "1px solid #252525",
+    border: 0,
+    borderRadius: 8,
+    marginBottom: 16,
+    zIndex: 100,
+  }}
+  src="https://codesandbox.io/p/sandbox/romantic-bush-7cfgk5?file=%2Fpackage.json%3A17%2C22&embed=1"
+  allowfullscreen
+></iframe>
+
+<Note>
+  Is there something about this documentation that doesn't make sense? [Click
+  this link to join us in Discord and tell us](https://discord.gg/SkASfNxtKa)
+</Note>
